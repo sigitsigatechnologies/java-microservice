@@ -1,0 +1,40 @@
+# Build artifacts
+**/target/
+**/*.jar
+**/*.class
+
+# IDE files
+**/.idea/
+**/.vscode/
+**/.settings/
+**/.project
+**/.classpath
+**/*.iml
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Logs
+**/logs/
+**/*.log
+
+# Docker
+**/docker-compose*.yml
+**/.dockerignore
+
+# AWS deployment files
+aws/
+docs/
+
+# Python scripts
+**/*.py
+**/__pycache__/
+
+# Misc
+**/*.md
+**/prometheus.yml

@@ -1,0 +1,71 @@
+{
+  "logs": {
+    "metrics_collected": {
+      "emf": {}
+    },
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/ecs/api-gateway*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "api-gateway/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/auth-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "auth-service/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/user-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "user-service/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/account-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "account-service/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/transfer-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "transfer-service/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/payroll-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "payroll-service/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/transaction-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "transaction-service/{instance_id}",
+            "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/ecs/notification-service*.log",
+            "log_group_name": "/ecs/cms-prod",
+            "log_stream_name": "notification-service/{instance_id}",
+            "timezone": "UTC"
+          }
+        ]
+      }
+    }
+  },
+  "metrics": {
+    "namespace": "CMS/Microservices",
+    "metrics_collected": {
+      "statsd": {
+        "service_address": ":8125",
+        "metrics_collection_interval": 60,
+        "metrics_aggregation_interval": 300
+      }
+    }
+  }
+}

@@ -1,0 +1,56 @@
+# =============================================
+# AWS Profile - Notification Service
+# Activated via: SPRING_PROFILES_ACTIVE=aws
+# =============================================
+server:
+  port: 8087
+
+spring:
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:mysql://${RDS_HOSTNAME}:${RDS_PORT:3306}/notification_db?useSSL=true&requireSSL=true&allowPublicKeyRetrieval=true
+    username: ${RDS_USERNAME}
+    password: ${RDS_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka.cms.local:9092}
+    consumer:
+      group-id: notification-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      access: unrestricted
+    health:
+      access: unrestricted
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    root: INFO
+    com.cms: INFO

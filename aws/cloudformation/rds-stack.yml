@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CMS Microservices - RDS MySQL Database'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: cms-prod
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+    Description: RDS instance class
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Storage in GB
+
+  DBUsername:
+    Type: String
+    Default: cmsadmin
+    Description: Master username
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Master password
+
+Resources:
+  # ============================================
+  # Security Group for RDS
+  # ============================================
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for CMS RDS MySQL
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ECSSecurityGroup
+          Description: Allow MySQL from ECS tasks
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-rds-sg'
+
+  # Security Group for ECS tasks (referenced by RDS SG)
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks to access RDS
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VpcId'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ecs-to-rds-sg'
+
+  # ============================================
+  # RDS Subnet Group
+  # ============================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for CMS RDS
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+        - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db-subnet-group'
+
+  # ============================================
+  # RDS Parameter Group
+  # ============================================
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: Parameter group for CMS MySQL
+      Family: mysql8.0
+      Parameters:
+        character_set_server: utf8mb4
+        collation_server: utf8mb4_unicode_ci
+        max_connections: '150'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-db-params'
+
+  # ============================================
+  # RDS MySQL Instance
+  # ============================================
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-mysql'
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: '8.0'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp3
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      MultiAZ: false
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      CopyTagsToSnapshot: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-mysql'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  RDSEndpoint:
+    Description: RDS MySQL endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentName}-RDSEndpoint'
+
+  RDSPort:
+    Description: RDS MySQL port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${EnvironmentName}-RDSPort'
+
+  RDSSecurityGroupId:
+    Description: RDS Security Group ID
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-RDSSecurityGroupId'
+
+  ECSToRDSSecurityGroupId:
+    Description: ECS to RDS Security Group ID
+    Value: !Ref ECSSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'

@@ -1,0 +1,271 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CMS Microservices - ECS Cluster, ALB, and Service Discovery'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: cms-prod
+
+Resources:
+  # ============================================
+  # ECS Cluster
+  # ============================================
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${EnvironmentName}-cluster'
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-cluster'
+
+  # ============================================
+  # Service Discovery Namespace
+  # ============================================
+  ServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: cms.local
+      Vpc:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VpcId'
+      Description: Service discovery namespace for CMS microservices
+
+  # ============================================
+  # ALB Security Group
+  # ============================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTP from anywhere
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS from anywhere
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-alb-sg'
+
+  # ============================================
+  # ECS Tasks Security Group
+  # ============================================
+  ECSTasksSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: Allow all traffic from ALB
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ecs-tasks-sg'
+
+  # Allow ECS tasks to communicate with each other
+  ECSTasksSelfIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ECSTasksSecurityGroup
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !Ref ECSTasksSecurityGroup
+      Description: Allow internal communication between ECS tasks
+
+  # ============================================
+  # Application Load Balancer
+  # ============================================
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentName}-alb'
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - Fn::ImportValue: !Sub '${EnvironmentName}-PublicSubnet1Id'
+        - Fn::ImportValue: !Sub '${EnvironmentName}-PublicSubnet2Id'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-alb'
+
+  # ============================================
+  # ALB Listener (HTTP)
+  # ============================================
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultAction:
+        Type: forward
+        TargetGroupArn: !Ref ApiGatewayTargetGroup
+
+  # ============================================
+  # Target Group for API Gateway
+  # ============================================
+  ApiGatewayTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentName}-api-gw-tg'
+      Port: 9080
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VpcId'
+      TargetType: ip
+      HealthCheckPath: /actuator/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-api-gw-tg'
+
+  # ============================================
+  # ECS Task Execution Role
+  # ============================================
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-ecs-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - Fn::ImportValue: !Sub '${EnvironmentName}-DatabaseSecretArn'
+                  - Fn::ImportValue: !Sub '${EnvironmentName}-JwtSecretArn'
+
+  # ============================================
+  # ECS Task Role (for application-level AWS access)
+  # ============================================
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-ecs-task-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  # ============================================
+  # CloudWatch Log Group
+  # ============================================
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}'
+      RetentionInDays: 30
+
+Outputs:
+  ECSClusterArn:
+    Description: ECS Cluster ARN
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-ECSClusterArn'
+
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${EnvironmentName}-ECSClusterName'
+
+  ALBDnsName:
+    Description: ALB DNS Name (use this to access the application)
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${EnvironmentName}-ALBDnsName'
+
+  ALBArn:
+    Description: ALB ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${EnvironmentName}-ALBArn'
+
+  ApiGatewayTargetGroupArn:
+    Description: API Gateway Target Group ARN
+    Value: !Ref ApiGatewayTargetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ApiGatewayTargetGroupArn'
+
+  ECSTaskExecutionRoleArn:
+    Description: ECS Task Execution Role ARN
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+
+  ECSTaskRoleArn:
+    Description: ECS Task Role ARN
+    Value: !GetAtt ECSTaskRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+
+  ECSTasksSecurityGroupId:
+    Description: ECS Tasks Security Group ID
+    Value: !Ref ECSTasksSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+
+  ServiceDiscoveryNamespaceId:
+    Description: Service Discovery Namespace ID
+    Value: !Ref ServiceDiscoveryNamespace
+    Export:
+      Name: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+
+  ServiceDiscoveryNamespaceArn:
+    Description: Service Discovery Namespace ARN
+    Value: !GetAtt ServiceDiscoveryNamespace.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceArn'
+
+  LogGroupName:
+    Description: CloudWatch Log Group Name
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-LogGroupName'

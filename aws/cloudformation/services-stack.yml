@@ -1,0 +1,902 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CMS Microservices - ECS Services (All 8 microservices + Kafka + Zookeeper)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: cms-prod
+
+  AWSAccountId:
+    Type: String
+    Description: AWS Account ID for ECR image URIs
+
+  AWSRegion:
+    Type: String
+    Default: ap-southeast-1
+
+  RDSEndpoint:
+    Type: String
+    Description: RDS MySQL endpoint hostname
+
+  RDSUsername:
+    Type: String
+    Default: cmsadmin
+
+  RDSPassword:
+    Type: String
+    NoEcho: true
+
+  JwtSecret:
+    Type: String
+    NoEcho: true
+
+  ServiceCpu:
+    Type: String
+    Default: '256'
+    Description: CPU units for each service (256 = 0.25 vCPU)
+
+  ServiceMemory:
+    Type: String
+    Default: '512'
+    Description: Memory in MB for each service
+
+Resources:
+  # ============================================
+  # ECR Repositories
+  # ============================================
+  ApiGatewayRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/api-gateway'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  AuthServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/auth-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  UserServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/user-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  AccountServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/account-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  TransferServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/transfer-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  PayrollServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/payroll-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  TransactionServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/transaction-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  NotificationServiceRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/notification-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  # ============================================
+  # Service Discovery Services
+  # ============================================
+  ApiGatewayServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: api-gateway
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  AuthServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: auth-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  UserServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: user-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  AccountServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: account-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  TransferServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: transfer-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  PayrollServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: payroll-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  TransactionServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: transaction-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  NotificationServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: notification-service
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  KafkaServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: kafka
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  ZookeeperServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: zookeeper
+      NamespaceId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ServiceDiscoveryNamespaceId'
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # ============================================
+  # ZOOKEEPER - Task Definition & Service
+  # ============================================
+  ZookeeperTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-zookeeper'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      ContainerDefinitions:
+        - Name: zookeeper
+          Image: confluentinc/cp-zookeeper:7.4.4
+          Essential: true
+          PortMappings:
+            - ContainerPort: 2181
+              Protocol: tcp
+          Environment:
+            - Name: ZOOKEEPER_CLIENT_PORT
+              Value: '2181'
+            - Name: ZOOKEEPER_TICK_TIME
+              Value: '2000'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: zookeeper
+
+  ZookeeperService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: zookeeper
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref ZookeeperTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt ZookeeperServiceDiscovery.Arn
+
+  # ============================================
+  # KAFKA - Task Definition & Service
+  # ============================================
+  KafkaTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-kafka'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      ContainerDefinitions:
+        - Name: kafka
+          Image: confluentinc/cp-kafka:7.4.4
+          Essential: true
+          PortMappings:
+            - ContainerPort: 9092
+              Protocol: tcp
+            - ContainerPort: 29092
+              Protocol: tcp
+          Environment:
+            - Name: KAFKA_BROKER_ID
+              Value: '1'
+            - Name: KAFKA_ZOOKEEPER_CONNECT
+              Value: zookeeper.cms.local:2181
+            - Name: KAFKA_ADVERTISED_LISTENERS
+              Value: PLAINTEXT://kafka.cms.local:9092
+            - Name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              Value: PLAINTEXT:PLAINTEXT
+            - Name: KAFKA_INTER_BROKER_LISTENER_NAME
+              Value: PLAINTEXT
+            - Name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              Value: '1'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: kafka
+
+  KafkaService:
+    Type: AWS::ECS::Service
+    DependsOn: ZookeeperService
+    Properties:
+      ServiceName: kafka
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref KafkaTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt KafkaServiceDiscovery.Arn
+
+  # ============================================
+  # API GATEWAY - Task Definition & Service
+  # ============================================
+  ApiGatewayTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-api-gateway'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: api-gateway
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/api-gateway:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 9080
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: api-gateway
+
+  ApiGatewayECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: api-gateway
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref ApiGatewayTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      LoadBalancers:
+        - ContainerName: api-gateway
+          ContainerPort: 9080
+          TargetGroupArn:
+            Fn::ImportValue: !Sub '${EnvironmentName}-ApiGatewayTargetGroupArn'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt ApiGatewayServiceDiscovery.Arn
+
+  # ============================================
+  # AUTH SERVICE - Task Definition & Service
+  # ============================================
+  AuthServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-auth-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: auth-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/auth-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8081
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+            - Name: JWT_SECRET
+              Value: !Ref JwtSecret
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: auth-service
+
+  AuthECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: auth-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref AuthServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt AuthServiceDiscovery.Arn
+
+  # ============================================
+  # USER SERVICE - Task Definition & Service
+  # ============================================
+  UserServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-user-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: user-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/user-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8082
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: user-service
+
+  UserECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: user-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref UserServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt UserServiceDiscovery.Arn
+
+  # ============================================
+  # ACCOUNT SERVICE - Task Definition & Service
+  # ============================================
+  AccountServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-account-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: account-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/account-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 9083
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: account-service
+
+  AccountECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: account-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref AccountServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt AccountServiceDiscovery.Arn
+
+  # ============================================
+  # TRANSFER SERVICE - Task Definition & Service
+  # ============================================
+  TransferServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-transfer-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: transfer-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/transfer-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8084
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: kafka.cms.local:9092
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: transfer-service
+
+  TransferECSService:
+    Type: AWS::ECS::Service
+    DependsOn: KafkaService
+    Properties:
+      ServiceName: transfer-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref TransferServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt TransferServiceDiscovery.Arn
+
+  # ============================================
+  # PAYROLL SERVICE - Task Definition & Service
+  # ============================================
+  PayrollServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-payroll-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: payroll-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/payroll-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8085
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: kafka.cms.local:9092
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: payroll-service
+
+  PayrollECSService:
+    Type: AWS::ECS::Service
+    DependsOn: KafkaService
+    Properties:
+      ServiceName: payroll-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref PayrollServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt PayrollServiceDiscovery.Arn
+
+  # ============================================
+  # TRANSACTION SERVICE - Task Definition & Service
+  # ============================================
+  TransactionServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-transaction-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: transaction-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/transaction-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8086
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: kafka.cms.local:9092
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: transaction-service
+
+  TransactionECSService:
+    Type: AWS::ECS::Service
+    DependsOn: KafkaService
+    Properties:
+      ServiceName: transaction-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref TransactionServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt TransactionServiceDiscovery.Arn
+
+  # ============================================
+  # NOTIFICATION SERVICE - Task Definition & Service
+  # ============================================
+  NotificationServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-notification-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskExecutionRoleArn'
+      TaskRoleArn:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSTaskRoleArn'
+      ContainerDefinitions:
+        - Name: notification-service
+          Image: !Sub '${AWSAccountId}.dkr.ecr.${AWSRegion}.amazonaws.com/${EnvironmentName}/notification-service:latest'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8087
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_PROFILES_ACTIVE
+              Value: aws
+            - Name: RDS_HOSTNAME
+              Value: !Ref RDSEndpoint
+            - Name: RDS_PORT
+              Value: '3306'
+            - Name: RDS_USERNAME
+              Value: !Ref RDSUsername
+            - Name: RDS_PASSWORD
+              Value: !Ref RDSPassword
+            - Name: KAFKA_BOOTSTRAP_SERVERS
+              Value: kafka.cms.local:9092
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group:
+                Fn::ImportValue: !Sub '${EnvironmentName}-LogGroupName'
+              awslogs-region: !Ref AWSRegion
+              awslogs-stream-prefix: notification-service
+
+  NotificationECSService:
+    Type: AWS::ECS::Service
+    DependsOn: KafkaService
+    Properties:
+      ServiceName: notification-service
+      Cluster:
+        Fn::ImportValue: !Sub '${EnvironmentName}-ECSClusterArn'
+      TaskDefinition: !Ref NotificationServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSTasksSecurityGroupId'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-ECSToRDSSecurityGroupId'
+          Subnets:
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet1Id'
+            - Fn::ImportValue: !Sub '${EnvironmentName}-PrivateSubnet2Id'
+      ServiceRegistries:
+        - RegistryArn: !GetAtt NotificationServiceDiscovery.Arn
+
+Outputs:
+  ApiGatewayRepoUri:
+    Description: ECR URI for API Gateway
+    Value: !GetAtt ApiGatewayRepo.RepositoryUri
+
+  AuthServiceRepoUri:
+    Description: ECR URI for Auth Service
+    Value: !GetAtt AuthServiceRepo.RepositoryUri
+
+  UserServiceRepoUri:
+    Description: ECR URI for User Service
+    Value: !GetAtt UserServiceRepo.RepositoryUri
+
+  AccountServiceRepoUri:
+    Description: ECR URI for Account Service
+    Value: !GetAtt AccountServiceRepo.RepositoryUri
+
+  TransferServiceRepoUri:
+    Description: ECR URI for Transfer Service
+    Value: !GetAtt TransferServiceRepo.RepositoryUri
+
+  PayrollServiceRepoUri:
+    Description: ECR URI for Payroll Service
+    Value: !GetAtt PayrollServiceRepo.RepositoryUri
+
+  TransactionServiceRepoUri:
+    Description: ECR URI for Transaction Service
+    Value: !GetAtt TransactionServiceRepo.RepositoryUri
+
+  NotificationServiceRepoUri:
+    Description: ECR URI for Notification Service
+    Value: !GetAtt NotificationServiceRepo.RepositoryUri

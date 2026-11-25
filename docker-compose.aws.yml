@@ -1,0 +1,318 @@
+version: '3.8'
+
+# ============================================
+# Local Docker Compose simulating AWS environment
+# All services containerized with AWS Spring profile
+# Usage: docker-compose -f docker-compose.aws.yml up -d
+# ============================================
+
+services:
+  # ============================================
+  # Infrastructure Services
+  # ============================================
+  mysql:
+    image: mysql:8.0
+    container_name: cms-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      cms-network:
+        aliases:
+          - mysql.cms.local
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.4
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      cms-network:
+        aliases:
+          - zookeeper.cms.local
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.4
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper.cms.local:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka.cms.local:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      cms-network:
+        aliases:
+          - kafka.cms.local
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ============================================
+  # Application Services (using AWS profile)
+  # ============================================
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "9080:9080"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      JWT_SECRET: MySuperSecretKeyForJwtWhichIsLongEnoughForHmacSHA256SignatureAlgorithm2026!
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - api-gateway.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      JWT_SECRET: MySuperSecretKeyForJwtWhichIsLongEnoughForHmacSHA256SignatureAlgorithm2026!
+      # Override SSL for local MySQL (no SSL)
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/auth_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - auth-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/user_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - user-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  account-service:
+    build:
+      context: ./account-service
+      dockerfile: Dockerfile
+    container_name: account-service
+    ports:
+      - "9083:9083"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/account_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - account-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  transfer-service:
+    build:
+      context: ./transfer-service
+      dockerfile: Dockerfile
+    container_name: transfer-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      KAFKA_BOOTSTRAP_SERVERS: kafka.cms.local:9092
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/transfer_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - transfer-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  payroll-service:
+    build:
+      context: ./payroll-service
+      dockerfile: Dockerfile
+    container_name: payroll-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      KAFKA_BOOTSTRAP_SERVERS: kafka.cms.local:9092
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/payroll_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - payroll-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  transaction-service:
+    build:
+      context: ./transaction-service
+      dockerfile: Dockerfile
+    container_name: transaction-service
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      KAFKA_BOOTSTRAP_SERVERS: kafka.cms.local:9092
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/transaction_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - transaction-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8086/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_PROFILES_ACTIVE: aws
+      RDS_HOSTNAME: mysql.cms.local
+      RDS_PORT: 3306
+      RDS_USERNAME: root
+      RDS_PASSWORD: root
+      KAFKA_BOOTSTRAP_SERVERS: kafka.cms.local:9092
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql.cms.local:3306/notification_db?useSSL=false&allowPublicKeyRetrieval=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      cms-network:
+        aliases:
+          - notification-service.cms.local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8087/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mysql-data:
+
+networks:
+  cms-network:
+    driver: bridge
